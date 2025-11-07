@@ -1,0 +1,17 @@
+Source: kosmos-notifications
+Section: misc
+Priority: optional
+Maintainer: Matteo Piscitelli <matteo@matteopiscitelli.it>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.5.1
+Homepage: https://kosmos-pi.org
+Rules-Requires-Root: no
+
+Package: kosmos-notifications
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, python3, python3-requests
+Description: Show desktop notifications from KosmOS team.
+ At login time, a script will silently check relevant news
+ from KosmOS webserver, and shows a small desktop notifications
+ for important news.

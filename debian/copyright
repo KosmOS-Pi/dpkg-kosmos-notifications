@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: kosmos-notifications
+Upstream-Contact: Matteo Piscitelli <matteo@matteopiscitelli.it>
+Source: https://github.com/KosmOS-Pi/dpkg-kosmos-notifications
+
+Files:     *
+Copyright: 2025 Matteo Piscitelli <matteo@matteopiscitelli.it>
+License:   GPL-3.0+
+
