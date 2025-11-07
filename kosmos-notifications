@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""
+kosmos-notifications
+Fetches notifications from a WordPress REST endpoint and displays them
+via system notifications (notify-send). Supports actions:
+ - OK
+ - View article
+ - Do not show again
+"""
+
+import os
+import json
+import requests
+from datetime import date, datetime, timedelta
+import subprocess
+
+# === CONFIG ===
+SERVER_URL = os.environ.get(
+    "KOSMOS_NOTIFICATIONS_URL",
+    "https://kosmos-pi.org/wp-json/kosmos/v1/notifications"
+)
+CACHE_FILE = os.path.expanduser("~/.local/share/kosmos-notifications.json")
+REQUEST_TIMEOUT = 5
+DISMISS_VALID_DAYS = 180
+
+# === UTILITIES ===
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"dismissed": {}, "last_modified": None}
+
+def save_cache(cache):
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+    with open(CACHE_FILE, "w") as f:
+        json.dump(cache, f, indent=2)
+
+def clean_dismissed(dismissed):
+    cutoff = date.today() - timedelta(days=DISMISS_VALID_DAYS)
+    new = {k: v for k, v in dismissed.items()
+           if datetime.strptime(v, "%Y-%m-%d").date() > cutoff}
+    return new
+
+def parse_date(s):
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            continue
+    return None
+
+def notify_send_wait(title, message, link=None, priority="normal"):
+    icons = {
+        "low": "dialog-information",
+        "normal": "dialog-information",
+        "high": "dialog-warning",
+    }
+    timeouts = {"low": "3000", "normal": "10000", "high": "0"}
+    pr = priority.lower()
+    icon = icons.get(pr, "dialog-information")
+    timeout = timeouts.get(pr, "10000")
+
+    cmd = [
+        "notify-send",
+        "--wait",
+        "-i", icon,
+        "-u", "normal",
+        "-t", timeout,
+        "-A", "hide=Do not show again",
+        "-A", "ok=OK",
+    ]
+    if link:
+        cmd += ["-A", "view=View article"]
+
+    cmd += [title, message]
+
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        action = res.stdout.strip()
+        if action == "view" and link:
+            subprocess.Popen(["xdg-open", link])
+        return action
+    except Exception:
+        return ""
+
+# === MAIN ===
+def main():
+    cache = load_cache()
+    cache.setdefault("dismissed", {})
+    cache.setdefault("last_modified", None)
+    cache["dismissed"] = clean_dismissed(cache["dismissed"])
+
+    headers = {}
+    if cache["last_modified"]:
+        headers["If-Modified-Since"] = cache["last_modified"]
+
+    try:
+        r = requests.get(SERVER_URL, timeout=REQUEST_TIMEOUT, headers=headers)
+    except Exception:
+        return
+
+    if r.status_code == 304:
+        return
+    if r.status_code != 200:
+        return
+
+    if "Last-Modified" in r.headers:
+        cache["last_modified"] = r.headers["Last-Modified"]
+
+    try:
+        notifications = r.json()
+    except Exception:
+        return
+
+    today = date.today()
+    modified = False
+
+    for n in notifications:
+        nid = n.get("id")
+        if not nid or nid in cache["dismissed"]:
+            continue
+
+        start = parse_date(n.get("start_date"))
+        end = parse_date(n.get("end_date"))
+        if start and today < start:
+            continue
+        if end and today > end:
+            continue
+
+        title = n.get("title", "Notification")
+        msg = n.get("message", "")
+        link = n.get("link")
+        priority = n.get("priority", "normal")
+
+        action = notify_send_wait(title, msg, link, priority)
+        if action == "hide":
+            cache["dismissed"][nid] = today.isoformat()
+            modified = True
+
+    if modified:
+        save_cache(cache)
+    else:
+        save_cache(cache)
+
+if __name__ == "__main__":
+    main()
