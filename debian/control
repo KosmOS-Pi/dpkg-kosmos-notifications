@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: kosmos-notifications
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, python3, python3-requests
+Depends: ${misc:Depends}, python3, python3-requests, libnotify-bin
 Description: Show desktop notifications from KosmOS team.
  At login time, a script will silently check relevant news
  from KosmOS webserver, and shows a small desktop notifications
