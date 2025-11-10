@@ -1,151 +1,154 @@
 #!/usr/bin/env python3
+
 """
-kosmos-notifications
+KosmOS notifications
+
+Copyright 2025 Matteo Piscitelli <matteo@matteopiscitelli.it>
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+
 Fetches notifications from a WordPress REST endpoint and displays them
 via system notifications (notify-send). Supports actions:
- - OK
  - View article
  - Do not show again
 """
 
 import os
 import json
+import time
 import requests
-from datetime import date, datetime, timedelta
 import subprocess
+from datetime import datetime, timezone
 
-# === CONFIG ===
-SERVER_URL = os.environ.get(
-    "KOSMOS_NOTIFICATIONS_URL",
-    "https://kosmos-pi.org/wp-json/kosmos/v1/notifications"
-)
-CACHE_FILE = os.path.expanduser("~/.local/share/kosmos-notifications.json")
-REQUEST_TIMEOUT = 5
-DISMISS_VALID_DAYS = 180
+# Configuration
+SERVER_URL = "https://kosmos-pi.org/wp-json/kosmos/v1/notifications"
+CACHE_DIR = os.path.expanduser("~/.cache/kosmos-notifications")
+LAST_RESPONSE_FILE = os.path.join(CACHE_DIR, "last_response.json")
+DISMISSED_FILE = os.path.join(CACHE_DIR, "dismissed.json")
+LAST_MODIFIED_FILE = os.path.join(CACHE_DIR, "last_modified.txt")
 
-# === UTILITIES ===
-def load_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"dismissed": {}, "last_modified": None}
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-def save_cache(cache):
-    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-    with open(CACHE_FILE, "w") as f:
-        json.dump(cache, f, indent=2)
+def load_json(path):
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
-def clean_dismissed(dismissed):
-    cutoff = date.today() - timedelta(days=DISMISS_VALID_DAYS)
-    new = {k: v for k, v in dismissed.items()
-           if datetime.strptime(v, "%Y-%m-%d").date() > cutoff}
-    return new
+def save_json(path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
-def parse_date(s):
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except Exception:
-            continue
+def get_last_modified():
+    if os.path.exists(LAST_MODIFIED_FILE):
+        return open(LAST_MODIFIED_FILE).read().strip()
     return None
 
-def notify_send_wait(title, message, link=None, priority="normal"):
+def save_last_modified(value):
+    with open(LAST_MODIFIED_FILE, "w") as f:
+        f.write(value)
+
+def fetch_notifications():
+    headers = {}
+    last_modified = get_last_modified()
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
+
+    try:
+        response = requests.get(SERVER_URL, headers=headers, timeout=10)
+        if response.status_code == 304:
+            return load_json(LAST_RESPONSE_FILE)
+
+        if response.status_code == 200:
+            data = response.json()
+            save_json(LAST_RESPONSE_FILE, data)
+            if "Last-Modified" in response.headers:
+                save_last_modified(response.headers["Last-Modified"])
+            return data
+    except Exception as e:
+        print(f"[kosmos-notifications] Warning: {e}")
+
+    # fallback
+    return load_json(LAST_RESPONSE_FILE)
+
+def within_date_range(start, end):
+    now = datetime.now(timezone.utc)
+    try:
+        if start and datetime.fromisoformat(start.replace("Z", "+00:00")) > now:
+            return False
+        if end and datetime.fromisoformat(end.replace("Z", "+00:00")) < now:
+            return False
+    except Exception:
+        pass
+    return True
+
+def show_notification(n):
     icons = {
         "low": "dialog-information",
         "normal": "dialog-information",
-        "high": "dialog-warning",
+        "high": "dialog-warning"
     }
-    timeouts = {"low": "3000", "normal": "10000", "high": "0"}
-    pr = priority.lower()
-    icon = icons.get(pr, "dialog-information")
-    timeout = timeouts.get(pr, "10000")
 
-    cmd = [
-        "notify-send",
-        "--wait",
-        "-i", icon,
-        "-u", "normal",
-        "-t", timeout,
-        "-A", "hide=Do not show again",
-        "-A", "ok=OK",
-    ]
+    title = n.get("title", "Kosmos Notification")
+    message = n.get("message", "")
+    priority = n.get("priority", "normal")
+    post_id = str(n.get("id"))
+    link = n.get("link")
+    icon = icons.get(priority, "dialog-information")
+
+    actions = []
     if link:
-        cmd += ["-A", "view=View article"]
+        actions += ["--action=view=View article"]
+    actions += ["--action=do_not_show=Do not show again"]
 
-    cmd += [title, message]
+    cmd = ["notify-send", "-a", "Message from KosmOS", "-i", icon, "-u", "normal", title, message] + actions
 
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        action = res.stdout.strip()
-        if action == "view" and link:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        action_pressed = result.stdout.strip()
+
+        if action_pressed == "view" and link:
             subprocess.Popen(["xdg-open", link])
-        return action
-    except Exception:
-        return ""
+        elif action_pressed == "do_not_show":
+            dismissed = load_json(DISMISSED_FILE)
+            dismissed[post_id] = True
+            save_json(DISMISSED_FILE, dismissed)
 
-# === MAIN ===
+    except Exception as e:
+        print(f"[kosmos-notifications] Failed to show: {e}")
+
 def main():
-    cache = load_cache()
-    cache.setdefault("dismissed", {})
-    cache.setdefault("last_modified", None)
-    cache["dismissed"] = clean_dismissed(cache["dismissed"])
+    data = fetch_notifications()
+    dismissed = load_json(DISMISSED_FILE)
 
-    headers = {}
-    if cache["last_modified"]:
-        headers["If-Modified-Since"] = cache["last_modified"]
-
-    try:
-        r = requests.get(SERVER_URL, timeout=REQUEST_TIMEOUT, headers=headers)
-    except Exception:
+    if not isinstance(data, list):
+        print("[kosmos-notifications] Invalid response format.")
         return
 
-    if r.status_code == 304:
-        return
-    if r.status_code != 200:
-        return
-
-    if "Last-Modified" in r.headers:
-        cache["last_modified"] = r.headers["Last-Modified"]
-
-    try:
-        notifications = r.json()
-    except Exception:
-        return
-
-    today = date.today()
-    modified = False
-
-    for n in notifications:
-        nid = n.get("id")
-        if not nid or nid in cache["dismissed"]:
+    for n in data:
+        post_id = str(n.get("id"))
+        if dismissed.get(post_id):
             continue
 
-        start = parse_date(n.get("start_date"))
-        end = parse_date(n.get("end_date"))
-        if start and today < start:
-            continue
-        if end and today > end:
+        start = n.get("start_date")
+        end = n.get("end_date")
+        if not within_date_range(start, end):
             continue
 
-        title = n.get("title", "Notification")
-        msg = n.get("message", "")
-        link = n.get("link")
-        priority = n.get("priority", "normal")
-
-        action = notify_send_wait(title, msg, link, priority)
-        if action == "hide":
-            cache["dismissed"][nid] = today.isoformat()
-            modified = True
-
-    if modified:
-        save_cache(cache)
-    else:
-        save_cache(cache)
+        show_notification(n)
 
 if __name__ == "__main__":
     main()
