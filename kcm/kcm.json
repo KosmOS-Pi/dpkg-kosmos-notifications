@@ -1,0 +1,14 @@
+{
+    "KPlugin": {
+        "Name": "News from KosmOS",
+        "Description": "Configure KosmOS desktop notifications",
+        "Icon": "kosmos-preferences-notifications",
+		"FormFactors": [
+		            "tablet",
+		            "handset",
+		            "desktop"
+		]
+	},
+    "X-Plasma-Weight": 80,
+    "X-KDE-System-Settings-Parent-Category": "personalization"
+}

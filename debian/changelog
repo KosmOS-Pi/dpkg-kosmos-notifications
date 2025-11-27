@@ -1,3 +1,10 @@
+kosmos-notifications (1.2-1) bookworm; urgency=medium
+
+  * Add configuration UI under Plasma System Settings to disable the notification
+    system.
+
+ -- Matteo Piscitelli <matteo@matteopiscitelli.it>  Fri, 28 Nov 2025 13:21:17 +0100
+
 kosmos-notifications (1.1-2) bookworm; urgency=low
 
   * Add xdg-utils to deps.
