@@ -28,7 +28,7 @@ KosmosKCM::KosmosKCM(QWidget *parent, const QVariantList &args)
 static QString overridePath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-           + "/autostart/kosmos-notify.desktop";
+           + "/autostart/kosmos-notifications.desktop";
 }
 
 /* ----------- LOAD: READ CURRENT STATE ----------- */

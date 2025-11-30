@@ -1,3 +1,9 @@
+kosmos-notifications (1.2.1-1) bookworm; urgency=medium
+
+  * Fix bug (wrong autostart override filename).
+
+ -- Matteo Piscitelli <matteo@matteopiscitelli.it>  Sun, 30 Nov 2025 14:02:50 +0000
+
 kosmos-notifications (1.2-1) bookworm; urgency=medium
 
   * Add configuration UI under Plasma System Settings to disable the notification
