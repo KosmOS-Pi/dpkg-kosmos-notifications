@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-KosmOS notifications
+KosmOS notifications version 1.3
 
 Copyright 2025 Matteo Piscitelli <matteo@matteopiscitelli.it>
 
@@ -65,7 +65,7 @@ def fetch_notifications():
     headers = {}
     last_modified = get_last_modified()
     if last_modified:
-        headers["If-Modified-Since"] = last_modified
+        headers["If-None-Match"] = last_modified
 
     try:
         response = requests.get(SERVER_URL, headers=headers, timeout=10)
@@ -75,25 +75,14 @@ def fetch_notifications():
         if response.status_code == 200:
             data = response.json()
             save_json(LAST_RESPONSE_FILE, data)
-            if "Last-Modified" in response.headers:
-                save_last_modified(response.headers["Last-Modified"])
+            if "ETag" in response.headers:
+                save_last_modified(response.headers["ETag"])
             return data
     except Exception as e:
         print(f"[kosmos-notifications] Warning: {e}")
 
     # fallback
     return load_json(LAST_RESPONSE_FILE)
-
-def within_date_range(start, end):
-    now = datetime.now(timezone.utc)
-    try:
-        if start and datetime.fromisoformat(start.replace("Z", "+00:00")) > now:
-            return False
-        if end and datetime.fromisoformat(end.replace("Z", "+00:00")) < now:
-            return False
-    except Exception:
-        pass
-    return True
 
 def show_notification(n):
     icons = {
@@ -141,11 +130,6 @@ def main():
     for n in data:
         post_id = str(n.get("id"))
         if dismissed.get(post_id):
-            continue
-
-        start = n.get("start_date")
-        end = n.get("end_date")
-        if not within_date_range(start, end):
             continue
 
         show_notification(n)

@@ -1,3 +1,9 @@
+kosmos-notifications (1.3-1) bookworm; urgency=medium
+
+  * New caching by ETag.
+
+ -- Matteo Piscitelli <matteo@matteopiscitelli.it>  Fri, 12 Dec 2025 15:59:57 +0000
+
 kosmos-notifications (1.2.1-1) bookworm; urgency=medium
 
   * Fix bug (wrong autostart override filename).
