@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 """
-KosmOS notifications version 1.3
+KosmOS notifications version 1.4
 
 Copyright 2025 Matteo Piscitelli <matteo@matteopiscitelli.it>
 
@@ -29,6 +29,8 @@ import time
 import requests
 import subprocess
 from datetime import datetime, timezone
+import html
+from urllib.parse import urlparse
 
 # Configuration
 SERVER_URL = "https://kosmos-pi.org/wp-json/kosmos/v1/notifications"
@@ -36,6 +38,9 @@ CACHE_DIR = os.path.expanduser("~/.cache/kosmos-notifications")
 LAST_RESPONSE_FILE = os.path.join(CACHE_DIR, "last_response.json")
 DISMISSED_FILE = os.path.join(CACHE_DIR, "dismissed.json")
 LAST_MODIFIED_FILE = os.path.join(CACHE_DIR, "last_modified.txt")
+SHOWN_FILE = os.path.join(CACHE_DIR, "shown.json")
+MAX_DISPLAYS = 3        # show each news item at most this many times
+POPUP_TIMEOUT = 30      # hard limit (seconds) for notify-send
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -98,30 +103,36 @@ def show_notification(n):
     link = n.get("link")
     icon = icons.get(priority, "dialog-information")
 
-    actions = []
-    if link:
-        actions += ["--action=view=View article"]
-    actions += ["--action=do_not_show=Do not show again"]
+    # The body supports a small HTML subset: escape the server text,
+    # then append a link that stays clickable in the notification history.
+    body = html.escape(message)
+    if link and urlparse(link).scheme in ("http", "https"):
+        body += '\n\n<a href="%s">View article</a>' % html.escape(link, quote=True)
 
-    cmd = ["notify-send", "-a", "Message from KosmOS", "-i", icon, "-u", "normal", title, message] + actions
+    cmd = ["notify-send", "-a", "Message from KosmOS",
+           "-h", "string:desktop-entry:kosmos-notifications",
+           "-i", icon, "-u", "normal", "-t", "20000",
+           title, body,
+           "--action=do_not_show=Do not show again"]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        action_pressed = result.stdout.strip()
-
-        if action_pressed == "view" and link:
-            subprocess.Popen(["xdg-open", link])
-        elif action_pressed == "do_not_show":
-            dismissed = load_json(DISMISSED_FILE)
-            dismissed[post_id] = True
-            save_json(DISMISSED_FILE, dismissed)
-
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                timeout=POPUP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return   # popup disabled or ignored: the notification stays in history
     except Exception as e:
         print(f"[kosmos-notifications] Failed to show: {e}")
+        return
+
+    if result.stdout.strip() == "do_not_show":
+        dismissed = load_json(DISMISSED_FILE)
+        dismissed[post_id] = True
+        save_json(DISMISSED_FILE, dismissed)
 
 def main():
     data = fetch_notifications()
     dismissed = load_json(DISMISSED_FILE)
+    shown = load_json(SHOWN_FILE)
 
     if not isinstance(data, list):
         print("[kosmos-notifications] Invalid response format.")
@@ -131,7 +142,11 @@ def main():
         post_id = str(n.get("id"))
         if dismissed.get(post_id):
             continue
+        if shown.get(post_id, 0) >= MAX_DISPLAYS:
+            continue
 
+        shown[post_id] = shown.get(post_id, 0) + 1
+        save_json(SHOWN_FILE, shown)
         show_notification(n)
 
 if __name__ == "__main__":

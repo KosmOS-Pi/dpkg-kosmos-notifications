@@ -1,0 +1,3 @@
+kosmos-notifications usr/bin
+kosmos-notifications.desktop usr/share/applications
+kosmos-notifications-autostart.desktop etc/xdg/autostart

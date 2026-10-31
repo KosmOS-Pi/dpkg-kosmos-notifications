@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Exec=/usr/bin/kosmos-notifications
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=KosmOS Notifications
+Comment=Fetch and show desktop notifications from the KosmOS server

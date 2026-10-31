@@ -1,3 +1,17 @@
+kosmos-notifications (1.4) trixie; urgency=medium
+
+  * Drop the Plasma System Settings module (Qt5/KF5, not loadable on
+    Plasma 6): notifications are now managed in System Settings ->
+    Notifications, through a proper application .desktop entry.
+  * Add desktop-entry hint to notifications.
+  * Show the article as a link in the notification body, so it stays
+    available in the history.
+  * Limit how many times each news item is shown.
+  * Add a timeout so the script no longer hangs when popups are disabled.
+  * Package is now architecture independent (no more compiled code).
+
+ -- Matteo Piscitelli <matteo@matteopiscitelli.it>  Sat, 31 Oct 2026 11:01:33 +0100
+
 kosmos-notifications (1.3-1) bookworm; urgency=medium
 
   * New caching by ETag.
