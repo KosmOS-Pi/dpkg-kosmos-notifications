@@ -1,3 +1,3 @@
-kosmos-notifications usr/bin
-kosmos-notifications.desktop usr/share/applications
-kosmos-notifications-autostart.desktop etc/xdg/autostart
+usr/bin/kosmos-notifications usr/bin
+usr/share/applications/kosmos-notifications.desktop usr/share/applications
+etc/xdg/autostart/kosmos-notifications.desktop etc/xdg/autostart

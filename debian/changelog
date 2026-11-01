@@ -1,3 +1,9 @@
+kosmos-notifications (1.4-2~deb13) trixie; urgency=medium
+
+  * Repackage.
+
+ -- Matteo Piscitelli <matteo@matteopiscitelli.it>  Sun, 01 Nov 2026 19:01:22 +0100
+
 kosmos-notifications (1.4-1~deb13) trixie; urgency=medium
 
   * Move package to final versioning. Ver: 1.4-1~deb13.
